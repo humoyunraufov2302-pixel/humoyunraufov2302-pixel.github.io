@@ -105,11 +105,9 @@ input[type=range]{width:100%;accent-color:var(--gold);min-height:30px}
   <section class="card">
     <h2>3. Slaydni yozib chiqish</h2>
     <label class="check"><input type="checkbox" id="write" checked>Har bir slayd ochilganda matni ruchka bilan yozilayotgandek paydo boʻlsin</label>
-    <label class="f">Yozish tezligi
-      <select id="wspeed"><option value="4">Sekin</option><option value="2.6" selected>Oʻrtacha</option><option value="1.6">Tez</option></select></label>
     <label class="f">Yozuvchi belgi
       <select id="wpen"><option value="pen">Ruchka</option><option value="chalk">Boʻr</option><option value="dot">Yorqin nuqta</option></select></label>
-    <p class="hint">Slayd yozilayotganda “Keyingi” tugmasini bossangiz, slayd darhol toʻliq chiqadi. Yana bossangiz, keyingi slaydga oʻtadi.</p>
+    <p class="hint">Qalam tezligini va “Qoʻlda” rejimini studiyaning oʻzida, yozish paytida ham sozlaysiz. Slayd yozilayotganda “Keyingi” tugmasini bossangiz, slayd darhol toʻliq chiqadi.</p>
   </section>
 
   <section class="card">
@@ -143,6 +141,16 @@ input[type=range]{width:100%;accent-color:var(--gold);min-height:30px}
       <span class="tabular" id="slNum" style="min-width:64px;text-align:center;font-weight:800">0 / 0</span>
       <button id="bNext" style="flex:1">Keyingi ▶</button></div>
   <div class="notes" id="notes"></div>
+
+  <section class="card" id="penCard">
+    <button class="rec big" id="bLine" hidden>Keyingi qator ▼</button>
+    <div class="range2"><span>Qalam tezligi: bitta toʻliq qator <b class="tabular" id="lsOut">6 s</b> da yoziladi</span>
+      <input type="range" id="lineSec" min="1" max="20" step="0.5" value="6" aria-label="Qalam tezligi"></div>
+    <div class="seg" id="wmode">
+      <button data-m="auto" class="on">Avtomatik</button>
+      <button data-m="manual">Qoʻlda: bosganimda keyingi qator</button>
+    </div>
+  </section>
 
 
 
@@ -213,7 +221,7 @@ const FRAMES=['#f2b632','#ff4d63','#3fd0e8','#ffffff','#7c5cff'];
 const PENS=[['#e8202f','Qizil'],['#1f5fe0','Koʻk'],['#11965a','Yashil'],['#111111','Qora'],['#ff9f0a','Toʻq sariq']];
 
 /* ---------------- setup: persisted fields ---------------- */
-['topic','fmt','shape','wspeed','wpen'].forEach(k=>{const v=store.get(k,null);if(v!=null)$(k).value=v;$(k).addEventListener('change',()=>store.set(k,$(k).value))});
+['topic','fmt','shape','wpen'].forEach(k=>{const v=store.get(k,null);if(v!=null)$(k).value=v;$(k).addEventListener('change',()=>store.set(k,$(k).value))});
 ['showPart','useIntro','noise','clean','blur','mirror','write','nocam'].forEach(k=>{const v=store.get(k,null);if(v!=null)$(k).checked=v;$(k).addEventListener('change',()=>store.set(k,$(k).checked))});
 $('topic').addEventListener('input',()=>store.set('topic',$('topic').value));
 FRAMES.forEach(c=>{const b=document.createElement('button');b.className='sw'+(c===S.frame?' on':'');b.style.background=c;b.setAttribute('aria-label','Ramka rangi');
@@ -414,30 +422,47 @@ function drawSlide(r){
   g.restore();
   if(penAt) drawWriter(penAt[0],penAt[1],fr.w);
 }
-let RV=null; // {slide,t0,pauseAt,durs,total,done}
+let RV=null; // {slide,idx,p,allow,done}
 const nowS=()=>performance.now()/1000;
+let lineSec=+store.get('lineSec',6), wmode=store.get('wmode','auto');
+function lineDur(b){const tall=Math.max(0,(b.y1-b.y0)/0.07-1);return Math.max(0.6,(b.x1-b.x0)*lineSec)*(1+tall*0.3)}
 function startReveal(){
   const s=S.slides[S.cur]; RV=null;
-  if(!$('write').checked||!s||!s.bands.length) return;
-  const base=+$('wspeed').value;
-  const durs=s.bands.map(b=>{const tall=Math.max(0,(b.y1-b.y0)/0.07-1);return Math.min(7,Math.max(0.35,(b.x1-b.x0)*base)*(1+tall*0.35))});
-  RV={slide:S.cur,t0:nowS(),pauseAt:(S.phase==='live'&&S.paused)?nowS():null,durs,total:durs.reduce((a,b)=>a+b,0),done:false};
+  if(!$('write').checked||!s||!s.bands.length){syncLineBtn();return}
+  RV={slide:S.cur,idx:0,p:0,allow:wmode==='manual'?0:Infinity,done:false}; syncLineBtn();
+}
+function advanceReveal(dt){
+  if(!RV||RV.done) return;
+  if(S.phase==='intro'||S.phase==='outro'||S.phase==='stopping'||(S.phase==='live'&&S.paused)) return;
+  const bands=S.slides[RV.slide]?S.slides[RV.slide].bands:[];
+  while(dt>0&&RV.idx<bands.length&&RV.idx<=RV.allow){
+    const d=lineDur(bands[RV.idx]), need=(1-RV.p)*d;
+    if(dt>=need){dt-=need;RV.idx++;RV.p=0}else{RV.p+=dt/d;dt=0}
+  }
+  if(RV.idx>=bands.length){RV.done=true;syncLineBtn()}
 }
 function revealMask(s,fr){
   if(!RV||RV.slide!==S.cur||RV.done) return null;
-  const e=(RV.pauseAt??nowS())-RV.t0; if(e>=RV.total){RV.done=true;return null}
-  let acc=0,pen=null; const B=s.bgc,cover=(x0,y0,x1,y1)=>g.drawImage(B,x0*B.width,y0*B.height,(x1-x0)*B.width,(y1-y0)*B.height,fr.x+x0*fr.w,fr.y+y0*fr.h,(x1-x0)*fr.w,(y1-y0)*fr.h);
+  let pen=null; const t=nowS(); const B=s.bgc,cover=(x0,y0,x1,y1)=>g.drawImage(B,x0*B.width,y0*B.height,(x1-x0)*B.width,(y1-y0)*B.height,fr.x+x0*fr.w,fr.y+y0*fr.h,(x1-x0)*fr.w,(y1-y0)*fr.h);
   s.bands.forEach((b,i)=>{
-    const d=RV.durs[i], y=fr.y+b.y0*fr.h, h=(b.y1-b.y0)*fr.h;
-    if(e>=acc+d){acc+=d;return}
-    const p=Math.max(0,(e-acc)/d), rx=fr.x+(b.x0+(b.x1-b.x0)*p)*fr.w;
-    if(p<=0){cover(0,b.y0,1,b.y1)}
-    else{cover(b.x0+(b.x1-b.x0)*p,b.y0,1,b.y1);const lh=Math.min(h,fr.h*0.05);
-      pen=[rx,y+h/2+Math.sin(e*38)*lh*0.22+Math.sin(e*11)*lh*0.12]}
-    acc+=d;
+    if(i<RV.idx) return;
+    const y=fr.y+b.y0*fr.h, h=(b.y1-b.y0)*fr.h, lh=Math.min(h,fr.h*0.05);
+    if(i>RV.idx||RV.p<=0){cover(0,b.y0,1,b.y1); if(i===RV.idx) pen=[fr.x+b.x0*fr.w,y+h/2]; return}
+    const xf=b.x0+(b.x1-b.x0)*RV.p; cover(xf,b.y0,1,b.y1);
+    pen=[fr.x+xf*fr.w,y+h/2+Math.sin(t*38)*lh*0.22+Math.sin(t*11)*lh*0.12];
   });
   return pen;
 }
+function syncLineBtn(){$('bLine').hidden=!(wmode==='manual'&&S.slides.length&&$('write').checked)}
+$('lineSec').value=lineSec; $('lsOut').textContent=lineSec+' s';
+$('lineSec').addEventListener('input',e=>{lineSec=+e.target.value;$('lsOut').textContent=lineSec+' s';store.set('lineSec',lineSec)});
+document.querySelectorAll('#wmode button').forEach(b=>{b.classList.toggle('on',b.dataset.m===wmode);b.onclick=()=>{
+  wmode=b.dataset.m;store.set('wmode',wmode);document.querySelectorAll('#wmode button').forEach(x=>x.classList.toggle('on',x===b));
+  if(RV&&!RV.done)RV.allow=wmode==='manual'?Math.max(RV.idx,0):Infinity; syncLineBtn()}});
+$('bLine').onclick=()=>{
+  if(RV&&!RV.done&&RV.slide===S.cur){RV.allow=Math.max(RV.allow+1,RV.idx);return}
+  if(S.cur<S.slides.length-1){S.cur++;updateSlideUI(true)}
+};
 function drawWriter(x,y,sw){
   const k=sw/900, st=$('wpen').value; g.save(); g.translate(x,y);
   if(st==='dot'){const r=14*k;const rg=g.createRadialGradient(0,0,0,0,0,r*2.4);rg.addColorStop(0,'#fff');rg.addColorStop(.35,'#ffcc33');rg.addColorStop(1,'rgba(255,204,51,0)');g.fillStyle=rg;g.beginPath();g.arc(0,0,r*2.4,0,7);g.fill();g.restore();return}
@@ -558,6 +583,7 @@ function loop(ts){
   requestAnimationFrame(loop);
   if($('studio').hidden) return;
   const now=performance.now()/1000;
+  advanceReveal(Math.min(0.1,now-(loop.last||now))); loop.last=now;
   if(S.phase==='intro'){const t=now-S.phaseT; drawIntro(t); if(t>=INTRO) goLive()}
   else if(S.phase==='outro'){const t=now-S.phaseT; drawOutro(t); if(t>=OUTRO) finishClip()}
   else{
@@ -637,8 +663,8 @@ function startClip(){
 function goLive(){S.phase='live';startReveal();S.liveStart=performance.now()/1000;micGate.gain.setTargetAtTime(1,AC.currentTime,0.05);setStatus(S.part+'-qism yozilmoqda',true);btns()}
 $('bPause').onclick=()=>{
   if(S.phase!=='live')return;
-  if(!S.paused){S.liveAcc+=performance.now()/1000-S.liveStart;S.paused=true;mr.pause();if(RV)RV.pauseAt=nowS();setStatus('Pauza');}
-  else{S.paused=false;S.liveStart=performance.now()/1000;mr.resume();if(RV&&RV.pauseAt!=null){RV.t0+=nowS()-RV.pauseAt;RV.pauseAt=null}setStatus(S.part+'-qism yozilmoqda',true)}
+  if(!S.paused){S.liveAcc+=performance.now()/1000-S.liveStart;S.paused=true;mr.pause();setStatus('Pauza');}
+  else{S.paused=false;S.liveStart=performance.now()/1000;mr.resume();setStatus(S.part+'-qism yozilmoqda',true)}
   btns();
 };
 function endLive(next){
