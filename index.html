@@ -184,7 +184,7 @@ textarea{min-height:90px;resize:vertical}
       <label class="drop" style="flex:1"><input type="file" id="fPdf" accept="application/pdf,.pdf" multiple><span>+ PDF fayl</span></label>
       <label class="drop" style="flex:1"><input type="file" id="fImg" accept="image/*" multiple><svg class="i"><use href="#i-img"/></svg><span>+ Rasmlar</span></label>
     </div>
-    <p class="hint" id="tSlides">Bir nechta faylni birdan tanlash uchun birinchi faylni bosib turing, keyin qolganlarini belgilang. Yangi tanlangan slaydlar oxiriga qoʻshiladi.</p>
+    <p class="hint" id="tSlides">Har safar yangi dars uchun slaydlarni shu yerdan yuklang. Bir nechta rasmni tanlash uchun birinchisini bosib turing.</p>
     <div class="thumbs" id="thumbs"></div>
     <p class="hint" id="slHint">Slaydga bosib, unga eslatma yozing yoki tartibini oʻzgartiring. Eslatma faqat sizga koʻrinadi, videoga tushmaydi.</p>
     <button class="btn" id="bClearDeck" hidden><svg class="i"><use href="#i-trash"/></svg>Hamma slaydlarni oʻchirish</button>
@@ -206,8 +206,8 @@ textarea{min-height:90px;resize:vertical}
 
   <button class="btn gold big" id="bOpen"><svg class="i"><use href="#i-cam"/></svg>Studiyani ochish</button>
   <button class="btn big" id="bLib"><svg class="i"><use href="#i-film"/></svg>Yozilgan videolar <span class="cnt" id="libCnt">0</span></button>
-  <p class="hint" style="text-align:center">Slaydlar va videolar telefon xotirasida saqlanib qoladi.</p>
-  <p class="hint" style="text-align:center;color:var(--gold2);font-weight:800">Studiocha · versiya 12</p>
+  <p class="hint" style="text-align:center">Yozilgan videolar telefon xotirasida saqlanib qoladi.</p>
+  <p class="hint" style="text-align:center;color:var(--gold2);font-weight:800">Studiocha · versiya 14</p>
  </div></div>
 </section>
 
@@ -269,7 +269,7 @@ textarea{min-height:90px;resize:vertical}
     </div>
 
     <div class="panel" data-p="write" hidden>
-      <div class="seg" data-cfg="smode"><button data-v="pen">Qalam bilan</button><button data-v="step">Bosqichma</button><button data-v="full">Toʻliq slayd</button></div>
+      <div class="seg" data-cfg="smode"><button data-v="step">Qatorma-qator</button><button data-v="full">Toʻliq slayd</button></div>
       <p class="hint" id="smodeHint"></p>
       <div class="chips" style="align-items:center">
         <div class="seg" data-cfg="wmode" style="flex:none" id="wmodeSeg"><button data-v="auto">Avtomatik</button><button data-v="manual">Qoʻlda</button></div>
@@ -362,9 +362,11 @@ window.addEventListener('error',e=>toast('Xatolik: '+(e.message||'nomaʼlum'),tr
 window.addEventListener('unhandledrejection',e=>{const m=e.reason&&(e.reason.message||e.reason.name);if(m&&!/abort/i.test(m))toast('Xatolik: '+m,true)});
 
 /* ======================= settings ======================= */
-const CFG=Object.assign({sfx:true,music:true,swoosh:true,autoClean:false,smode:'pen',brand:'Humoyun bilan matematika',name:'Humoyun Raufov',topic:'',fmt:'v',intro:true,partNo:true,layout:'split',pipCorner:3,camShape:'circle',frame:'#f2b632',
+const CFG=Object.assign({sfx:true,music:true,swoosh:true,autoClean:true,smode:'step',brand:'Humoyun bilan matematika',name:'Humoyun Raufov',topic:'',fmt:'v',intro:true,partNo:true,layout:'split',pipCorner:3,camShape:'circle',frame:'#f2b632',
   theme:'tun',camFilter:'none',soft:false,logo:true,nameTag:true,slideNo:true,blur:false,mirror:true,
   write:true,wpen:'pen',lineSec:6,wmode:'auto',noise:true,clean:true,vol:1.4,facing:'user',notes:true},store.get('cfg',{}));
+if(CFG.smode==='pen')CFG.smode='step';
+if(!CFG.m13){CFG.m13=1;CFG.autoClean=true;CFG.smode='step'}
 const saveCfg=()=>store.set('cfg',CFG);
 const OUT={lineSec:v=>v+' s',vol:v=>Math.round(v*100)+'%'};
 function syncAll(){$$('[data-cfg]').forEach(el=>el._sync&&el._sync());$$('[data-out]').forEach(o=>o.textContent=OUT[o.dataset.out](CFG[o.dataset.out]));
@@ -410,7 +412,7 @@ const dbGet=(st,k)=>dbDo(st,'readonly',s=>s.get(k));
 const dbAll=st=>dbDo(st,'readonly',s=>s.getAll());
 const dbDel=(st,k)=>dbDo(st,'readwrite',s=>s.delete(k));
 let saveDeckT=0;
-function saveDeck(){clearTimeout(saveDeckT);saveDeckT=setTimeout(()=>dbPut('kv',S.slides.map(s=>({blob:s.blob,note:s.note})),'deck'),400)}
+function saveDeck(){}
 
 /* ======================= state ======================= */
 const S={slides:[],cur:0,ann:[],trans:null,tool:'hl',color:'#ffd400',size:1,W:720,H:1280,phase:'idle',paused:false,part:0,
@@ -479,6 +481,7 @@ async function addFiles(files){
   if(!files.length)return;
   const t=$('tSlides'),btns=[$('fPdf'),$('fImg')];btns.forEach(b=>b.disabled=true);
   let added=0,failed=0;
+  S.slides=[];S.ann=[];S.cur=0;renderThumbs();
   try{
     files.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
     for(const f of files){
@@ -491,8 +494,8 @@ async function addFiles(files){
       }catch(err){failed++;toast(f.name+': '+(err.message||'ochilmadi'),true)}
     }
     saveDeck();
-    if(added)toast(added+' ta slayd qoʻshildi · jami '+S.slides.length);
-  }finally{btns.forEach(b=>b.disabled=false);t.textContent='Yana qoʻshish uchun PDF yoki rasmlarni tanlang. Bir nechtasini tanlash uchun birinchisini bosib turing.'}
+    if(added)toast(added+' ta slayd yuklandi');
+  }finally{btns.forEach(b=>b.disabled=false);t.textContent=S.slides.length?'Boshqa slayd tanlasangiz, hozirgilari almashtiriladi.':'PDF yoki rasmlarni tanlang.'}
 }
 async function shrinkImage(f){
   const im=await imgFrom(URL.createObjectURL(f));const k=Math.min(1,1920/Math.max(im.naturalWidth,im.naturalHeight));
@@ -656,30 +659,45 @@ function setMonitor(){if(sfxMon)sfxMon.gain.value=S.phase==='live'?0:.6}
 function fitRect(r,iw,ih){const k=Math.min(r.w/iw,r.h/ih),w=iw*k,h=ih*k;return {x:r.x+(r.w-w)/2,y:r.y+(r.h-h)/2,w,h}}
 function slideAR(){const s=S.slides[S.cur];return s?s.img.naturalWidth/s.img.naturalHeight:4/3}
 function camAR(){return clamp(S.hasCam&&camVid.videoWidth?camVid.videoWidth/camVid.videoHeight:.75,.75,1.34)}
+/* Layouts follow common lesson-video practice: the slide keeps its own shape, the camera keeps (almost) its own
+   shape so a person never looks stretched or squeezed, and leftover space becomes an info card. */
+function camBox(area){const ca=camAR(),a=clamp(area.w/area.h,ca*.85,ca*1.18);let w=area.w,h=w/a;if(h>area.h){h=area.h;w=h*a}
+  return {x:area.x+(area.w-w)/2,y:area.y+(area.h-h)/2,w,h}}
 function target(){
   const W=S.W,H=S.H,u=Math.min(W,H),m=Math.max(8,Math.round(u*.022)),v=H>W,L=S.slides.length?CFG.layout:'cam';
-  const X0=m,Y0=m,AW=W-2*m,AH=H-2*m,ca=camAR(),rq=x=>Math.min(x.w,x.h)*.04;
-  const R=(o,shape)=>Object.assign(o,{r:shape==='circle'?Math.min(o.w,o.h)/2:rq(o),a:1});
-  if(L==='cam')return {slide:null,cam:R({x:X0,y:Y0,w:AW,h:AH},'rect')};
+  const X0=m,Y0=m,AW=W-2*m,AH=H-2*m,sa=slideAR(),rq=x=>Math.min(x.w,x.h)*.045;
+  const R=(o,circle)=>o?Object.assign(o,{r:circle?Math.min(o.w,o.h)/2:rq(o),a:1}):null;
+  const out=(sl,cm,inf,circle)=>({slide:R(sl),cam:R(cm,circle),info:inf&&inf.w>40&&inf.h>40?R(inf):null});
+  if(L==='cam')return out(null,{x:X0,y:Y0,w:AW,h:AH},null);
   const full={x:X0,y:Y0,w:AW,h:AH};
-  if(L==='slide')return {slide:R(full,'rect'),cam:null};
-  if(L==='pip'){const s=Math.round(u*(v?.34:.26)),c=CFG.pipCorner,circle=CFG.camShape==='circle',p=m*1.6;
-    const cw=circle?s:Math.round(s*(ca>=1?ca:1)),ch=circle?s:Math.round(s/(ca<1?ca:1));
-    const x=c%2?W-p-cw:p,y=c>1?H-p-ch:p;return {slide:R(full,'rect'),cam:R({x,y,w:cw,h:ch},circle?'circle':'rect')}}
-  if(L==='stack'){const h1=Math.round((AH-m)*.75);return {slide:R({x:X0,y:Y0,w:AW,h:h1},'rect'),cam:R({x:X0,y:Y0+h1+m,w:AW,h:AH-m-h1},'rect')}}
-  const w1=Math.round((AW-m)*.75);
-  return {slide:R({x:X0,y:Y0,w:w1,h:AH},'rect'),cam:R({x:X0+w1+m,y:Y0,w:AW-m-w1,h:AH},'rect')};
+  if(L==='slide')return out(full,null,null);
+  if(L==='pip'){const ca=camAR(),s=Math.round(u*(v?.34:.26)),c=CFG.pipCorner,circle=CFG.camShape==='circle',p=m*1.6;
+    const cw=circle?s:Math.round(ca>=1?s*ca:s),ch=circle?s:Math.round(ca>=1?s:s/ca);
+    return out(full,{x:c%2?W-p-cw:p,y:c>1?H-p-ch:p,w:cw,h:ch},null,circle)}
+  if(!v){
+    if(L==='split'){const col=Math.round(AW*.25),sl=fitRect({x:X0,y:Y0,w:AW-m-col,h:AH},sa,1);sl.x=X0;
+      const cx=sl.x+sl.w+m,cw=W-m-cx,cam=camBox({x:cx,y:Y0,w:cw,h:AH*.64});cam.y=Y0;
+      return out(sl,cam,{x:cx,y:cam.y+cam.h+m,w:cw,h:Y0+AH-(cam.y+cam.h+m)})}
+    const sl=fitRect({x:X0,y:Y0,w:AW,h:AH*.7},sa,1);sl.y=Y0;const y=sl.y+sl.h+m,h=Y0+AH-y;
+    const cam=camBox({x:X0,y,w:AW*.4,h});cam.x=W/2-cam.w-m/2;
+    return out(sl,cam,{x:W/2+m/2,y:cam.y,w:Math.min(AW/2-m/2,cam.w*2.4),h:cam.h})
+  }
+  const sl=fitRect({x:X0,y:Y0,w:AW,h:AH*.5},sa,1);sl.y=Y0;const y=sl.y+sl.h+m,h=Y0+AH-y;
+  if(L==='stack'){const ih=Math.round(u*.2),cam=camBox({x:X0,y,w:AW,h:h-ih-m});cam.y=y;
+    return out(sl,cam,{x:X0,y:cam.y+cam.h+m,w:AW,h:Y0+AH-(cam.y+cam.h+m)})}
+  const cam=camBox({x:X0,y,w:AW*.58,h});cam.x=X0;cam.y=y;
+  return out(sl,cam,{x:cam.x+cam.w+m,y,w:W-m-(cam.x+cam.w+m),h:cam.h});
 }
-const A={slide:null,cam:null,snap:true};
+const A={slide:null,cam:null,info:null,snap:true};
 function animRects(dt){
   const T=target(),k=A.snap?1:1-Math.exp(-dt*9);A.snap=false;
-  for(const n of ['slide','cam']){const t=T[n];
+  for(const n of ['slide','cam','info']){const t=T[n];
     if(!A[n]){if(t)A[n]=Object.assign({},t,{a:0,x:t.x+t.w*.05,y:t.y+t.h*.05,w:t.w*.9,h:t.h*.9});else continue}
     const a=A[n];
     if(t){for(const p of ['x','y','w','h','r'])a[p]=lerp(a[p],t[p],k);a.a=lerp(a.a,1,k)}
     else{a.a=lerp(a.a,0,k);if(a.a<.01)A[n]=null}
   }
-  if(k===1){for(const n of ['slide','cam'])if(A[n])A[n].a=1}
+  if(k===1){for(const n of ['slide','cam','info'])if(A[n])A[n].a=1}
 }
 
 /* ======================= drawing ======================= */
@@ -777,7 +795,8 @@ function drawWriter(x,y,sw){
 function drawStroke(st,fr){
   if(st.pts.length<1) return;
   g.save(); g.lineCap='round'; g.lineJoin='round';
-  if(st.tool==='marker'){g.globalAlpha=.35;g.lineWidth=fr.w*0.03}else g.lineWidth=fr.w*0.006*(st.sz||1);
+  if(st.tool==='hl'){g.globalAlpha*=.45;g.globalCompositeOperation='multiply';g.lineWidth=fr.w*0.03*(st.sz||1)}
+  else if(st.tool==='marker'){g.globalAlpha=.35;g.lineWidth=fr.w*0.03}else g.lineWidth=fr.w*0.006*(st.sz||1);
   g.strokeStyle=st.color; g.beginPath();
   const P=p=>[fr.x+p[0]*fr.w,fr.y+p[1]*fr.h];
   let [x,y]=P(st.pts[0]); g.moveTo(x,y);
@@ -786,16 +805,38 @@ function drawStroke(st,fr){
   if(st.pts.length>1){const l=P(st.pts[st.pts.length-1]);g.lineTo(l[0],l[1])}
   g.stroke(); g.restore();
 }
+/* ---------- info card (brand, name, topic, slide counter) ---------- */
+function fitFont(txt,maxW,size,weight,fam){let f=size;g.font=weight+' '+f+'px '+fam;while(f>8&&g.measureText(txt).width>maxW){f-=1;g.font=weight+' '+f+'px '+fam}return f}
+function drawInfo(r){
+  g.save();g.globalAlpha=r.a;rr(r.x,r.y,r.w,r.h,r.r);
+  const q=g.createLinearGradient(r.x,r.y,r.x+r.w,r.y+r.h);q.addColorStop(0,'rgba(10,13,32,.82)');q.addColorStop(1,'rgba(30,20,60,.78)');g.fillStyle=q;g.fill();
+  g.lineWidth=Math.max(2,Math.min(S.W,S.H)*.004);g.strokeStyle=CFG.frame;g.stroke();
+  const wide=r.w>r.h*1.5,pad=Math.min(r.w,r.h)*.1,brand=(CFG.brand||'').trim()||'Humoyun bilan matematika',name=CFG.name||'',
+    topic=(CFG.topic||'').replace(/ni$/,'').trim(),sl=S.slides.length?('Slayd '+(S.cur+1)+' / '+S.slides.length):'';
+  const lines=[[brand,'800','Unbounded, sans-serif',CFG.frame],[name,'800','Manrope, sans-serif','#ffffff'],[topic,'700','Manrope, sans-serif','#cfd6ff'],[sl,'800','Manrope, sans-serif',CFG.frame]].filter(l=>l[0]);
+  let av,tx,tw,ty,align;
+  if(wide){av=Math.min(r.h-2*pad,r.w*.28);tx=r.x+pad*2+av;tw=r.x+r.w-pad-tx;align='left'}
+  else{av=Math.min(r.w*.42,r.h*.36);tx=r.x+pad;tw=r.w-2*pad;align='center'}
+  const ax=wide?r.x+pad:r.x+(r.w-av)/2,ay=wide?r.y+(r.h-av)/2:r.y+pad;
+  if(S.avatar&&av>16){g.save();g.beginPath();g.arc(ax+av/2,ay+av/2,av/2,0,7);g.clip();g.drawImage(S.avatar,ax,ay,av,av);g.restore();
+    g.beginPath();g.arc(ax+av/2,ay+av/2,av/2,0,7);g.lineWidth=Math.max(2,av*.04);g.strokeStyle=CFG.frame;g.stroke()}
+  const area=wide?r.h-2*pad:r.y+r.h-pad-(ay+av+pad*.6),base=Math.max(10,Math.min(area/(lines.length*1.45),tw*.11));
+  const sizes=lines.map((l,i)=>fitFont(l[0],tw,Math.round(base*(i===0?1.05:i===1?1.1:.85)),l[1],l[2]));
+  const total=sizes.reduce((a,b)=>a+b*1.35,0);let yy=wide?r.y+(r.h-total)/2:ay+av+pad*.6+Math.max(0,(area-total)/2);
+  g.textBaseline='top';g.textAlign=align;
+  lines.forEach((l,i)=>{g.font=l[1]+' '+sizes[i]+'px '+l[2];g.fillStyle=l[3];g.fillText(l[0],align==='center'?r.x+r.w/2:tx,yy);yy+=sizes[i]*1.35});
+  g.restore();
+}
 /* ---------- on-video branding ---------- */
 function drawOverlays(t){
   const W=S.W,H=S.H,u=Math.min(W,H),m=u*.035,light=!(THEMES[CFG.theme]||THEMES.tun).dark;
-  if(CFG.logo){const r=u*.026,fs=Math.round(u*.021);g.save();g.font='800 '+fs+'px Manrope, sans-serif';
-    const host=A.cam&&A.cam.w>u*.3?A.cam:(A.slide||A.cam),inset=u*.014,txt=(CFG.brand||'').trim()||'Humoyun bilan matematika',tw=g.measureText(txt).width,
+  if(CFG.logo&&!A.info){const r=u*.026,fs=Math.round(u*.021);g.save();g.font='800 '+fs+'px Manrope, sans-serif';
+    const host=A.cam&&A.cam.w>u*.3&&A.cam.r<A.cam.w*.3?A.cam:(A.slide||A.cam),inset=u*.014,txt=(CFG.brand||'').trim()||'Humoyun bilan matematika',tw=g.measureText(txt).width,
       x=(host?host.x+(host.r>host.w*.3?host.w*.15:inset):m),y=(host?host.y+(host.r>host.w*.3?host.h*.02:inset):m),h=r*2+8;
     rr(x,y,tw+r*2+26,h,h/2);g.fillStyle=light?'rgba(255,255,255,.85)':'rgba(5,7,15,.55)';g.fill();
     g.save();g.beginPath();g.arc(x+4+r,y+4+r,r,0,7);g.clip();if(S.avatar)g.drawImage(S.avatar,x+4,y+4,2*r,2*r);g.restore();
     g.fillStyle=light?'#1a1f3a':'#fff';g.textBaseline='middle';g.fillText(txt,x+2*r+14,y+h/2+1);g.restore()}
-  if(CFG.slideNo&&S.slides.length&&A.slide&&S.phase!=='intro'&&S.phase!=='outro'){const fs=Math.round(u*.022),s=(S.cur+1)+' / '+S.slides.length;g.save();g.font='800 '+fs+'px Manrope, sans-serif';
+  if(CFG.slideNo&&!A.info&&S.slides.length&&A.slide&&S.phase!=='intro'&&S.phase!=='outro'){const fs=Math.round(u*.022),s=(S.cur+1)+' / '+S.slides.length;g.save();g.font='800 '+fs+'px Manrope, sans-serif';
     const w=g.measureText(s).width+fs*1.4,sb=A.slide||{x:0,y:0,w:W,h:H},bx=sb.x+sb.w-w-u*.014,by=sb.y+sb.h-fs*1.9-u*.014;
     rr(bx,by,w,fs*1.9,fs);g.fillStyle='rgba(5,7,15,.6)';g.fill();g.fillStyle=CFG.frame;g.textBaseline='middle';g.fillText(s,bx+fs*.7,by+fs*.98);g.restore()}
   if(CFG.nameTag){const e=t-S.ltT;if(e>=0&&e<6){const inn=ease(e/.6),out=ease((e-5.3)/.7),p=inn*(1-out);
@@ -873,7 +914,7 @@ function sparkles(t){SP.forEach(p=>{const a=(Math.sin(t*2+p.p)+1)/2;g.fillStyle=
 let RV=null;
 const stepwise=()=>CFG.smode==='step'||CFG.wmode==='manual';
 function syncWritePanel(){const pen=CFG.smode==='pen';['wmodeSeg','speedRow','wpenRow','bRewrite'].forEach(id=>{const e=$(id);if(e)e.hidden=!pen});
-  $('smodeHint').textContent={pen:'Matn qalam bilan qatorma-qator yoziladi.',step:'Oddiy slayd kabi: har bosishda keyingi qator darhol chiqadi, oxirida keyingi slaydga oʻtadi.',full:'Slayd birdaniga toʻliq koʻrinadi.'}[CFG.smode]||''}
+  $('smodeHint').textContent={pen:'Matn qalam bilan qatorma-qator yoziladi.',step:'“Keyingi qator” yoki oʻng strelkani har bosganda slayddagi keyingi qator chiqadi. Qatorlar tugagach, keyingi slaydga oʻtadi.',full:'Slayd birdaniga toʻliq koʻrinadi.'}[CFG.smode]||''}
 function lineDur(b){if(CFG.smode==='step')return .35;const tall=Math.max(0,(b.y1-b.y0)/.07-1);return Math.max(.6,(b.x1-b.x0)*CFG.lineSec)*(1+tall*.3)}
 function startReveal(){const s=S.slides[S.cur];RV=null;if(CFG.write&&s&&s.bands.length)RV={slide:S.cur,idx:0,p:0,allow:stepwise()?0:Infinity,done:false};syncLineBtn()}
 function advanceReveal(dt){
@@ -929,6 +970,7 @@ function loop(){
     drawTheme(CFG.theme,t);animRects(dt);
     if(A.slide)drawSlideBox(A.slide);else lastFr=null;
     if(A.cam)drawCamBox(A.cam);
+    if(A.info)drawInfo(A.info);
     drawOverlays(t);
     if(S.phase==='live'&&S.paused){g.fillStyle='rgba(0,0,0,.35)';g.fillRect(0,0,S.W,S.H)}
   }
@@ -951,22 +993,22 @@ cv.addEventListener('pointerdown',e=>{
   const p=toSlide(e);if(!p)return;cv.setPointerCapture(e.pointerId);
   if(S.tool==='zoom'){const z=S.zoom;if(z.t>1)z.t=1;else{z.u=p[0];z.v=p[1];z.t=2.2}return}
   if(S.tool==='laser'){laser={u:p[0],v:p[1]};return}
-  if(S.tool==='hl'){const st={color:S.color,sz:S.size,slide:S.cur,pts:[p],end:Infinity};hl.push(st);cursor={u:p[0],v:p[1],t:nowS(),down:true,color:S.color,st};return}
+  if(S.tool==='hl'){curStroke={tool:'hl',color:S.color,sz:S.size,slide:S.cur,pts:[p]};cursor={u:p[0],v:p[1],t:nowS(),down:true,color:S.color};return}
   if(S.tool==='eraser'){erase(p);curStroke={tool:'eraser',pts:[]};return}
   curStroke={tool:S.tool,color:S.color,sz:S.size,slide:S.cur,pts:[p]};
 });
 cv.addEventListener('pointermove',e=>{
   if(!laser&&!curStroke&&!(cursor&&cursor.down))return;const p=toSlide(e);if(!p)return;
-  if(cursor&&cursor.down){cursor.u=p[0];cursor.v=p[1];cursor.t=nowS();const pts=cursor.st.pts,l=pts[pts.length-1];if(Math.hypot(p[0]-l[0],p[1]-l[1])>.002)pts.push(p);return}
+  if(cursor&&cursor.down){cursor.u=p[0];cursor.v=p[1];cursor.t=nowS()}
   if(laser){laser={u:p[0],v:p[1]};trail.push({u:p[0],v:p[1],t:performance.now()});return}
   if(curStroke.tool==='eraser'){erase(p);return}
   const l=curStroke.pts[curStroke.pts.length-1];if(Math.hypot(p[0]-l[0],p[1]-l[1])>.002)curStroke.pts.push(p);
 });
-const endPtr=()=>{laser=null;if(cursor&&cursor.down){cursor.down=false;cursor.t=nowS();cursor.st.end=nowS()}if(curStroke&&curStroke.tool!=='eraser'&&curStroke.pts.length&&S.ann[curStroke.slide])S.ann[curStroke.slide].push(curStroke);curStroke=null};
+const endPtr=()=>{laser=null;if(cursor&&cursor.down){cursor.down=false;cursor.t=nowS()}if(curStroke&&curStroke.tool!=='eraser'&&curStroke.pts.length&&S.ann[curStroke.slide])S.ann[curStroke.slide].push(curStroke);curStroke=null};
 cv.addEventListener('pointerup',endPtr);cv.addEventListener('pointercancel',endPtr);
 function erase(p){const a=S.ann[S.cur];if(a)S.ann[S.cur]=a.filter(st=>!st.pts.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<.03))}
 $$('#tools [data-t]').forEach(b=>b.onclick=()=>{S.tool=b.dataset.t;$$('#tools [data-t]').forEach(x=>x.classList.toggle('on',x===b));
-  if(S.tool==='zoom')toast('Lupa: slaydning kerakli joyiga bosing, qayta bossangiz qaytadi');if(S.tool==='hl')toast('Barmoq yurgan joy belgilanadi va 3 soniyada oʻzi yoʻqoladi')});
+  if(S.tool==='zoom')toast('Lupa: slaydning kerakli joyiga bosing, qayta bossangiz qaytadi');if(S.tool==='hl')toast('Barmoq yurgan joy tanlangan rangda belgilanib qoladi')});
 $('bUndo').onclick=()=>{const a=S.ann[S.cur];if(a&&a.length)a.pop()};
 $('bClear').onclick=()=>{if(S.ann[S.cur])S.ann[S.cur]=[];S.zoom.t=1};
 PENS.forEach(([c,n],i)=>{const b=document.createElement('button');b.className='dotc'+(i===0?' on':'');b.style.background=c;b.setAttribute('aria-label',n);
@@ -1230,8 +1272,7 @@ async function remuxAudio(videoBlob,samples,sr,onP){
 (async()=>{
   CFG.write=CFG.smode!=='full';bindCfg();syncWritePanel();syncBrand();syncLayout();syncBtns();
   await idb();
-  const deck=await dbGet('kv','deck');
-  if(deck&&deck.length){try{for(const d of deck)S.slides.push(await mkSlide(d.blob,d.note));S.ann=S.slides.map(()=>[]);renderThumbs()}catch(e){}}
+  dbDel('kv','deck');renderThumbs();
   S.clips=((await dbAll('clips'))||[]).sort((a,b)=>b.id-a.id);updLibCnt();syncLayout();
   if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
 })();
